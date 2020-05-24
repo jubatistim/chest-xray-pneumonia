@@ -1,96 +1,104 @@
 # Convolutional Neural Network
 
 ### Importing the libraries
+from keras.models import Sequential
+from keras.layers import Convolution2D
+from keras.layers import MaxPooling2D
+from keras.layers import Flatten
+from keras.layers import Dense
 
-import tensorflow as tf
-from keras.preprocessing.image import ImageDataGenerator
+import os
 import calendar
 import time
-import os
 
 ###############################
-## Part 1 - Data Preprocessing
+# Part 1 - Building CNN
 ###############################
 
-### Generating images for the Training set
-train_datagen = ImageDataGenerator(rescale = 1./255,
-                                   shear_range = 0.2,
-                                   zoom_range = 0.2,
-                                   horizontal_flip = True)
+# Initializing CNN
+classifier = Sequential()
 
-### Generating images for the Test set
-test_datagen = ImageDataGenerator(rescale = 1./255)
+# Step 1 - Convolution
+# 3 first parameters
+#       nb_filters = number of filters (feature filter to create feature map) for convolution - tipically starts with 32, and then add another convolution layers with more filters (64, 128, 256...)
+#       nb_rows = rows of filter
+#       nb_columns = columns of filter
+#       input_shape = image size + number of channels (WARNING: for Theano backend use (128, 128, 3)
+#       activation = activation function for the output of current layer
+classifier.add(Convolution2D(32, 6, 6, input_shape=(64, 64, 3), activation = 'relu'))
 
-### Creating the Training set
-training_set = train_datagen.flow_from_directory('chest_xray/train',
-                                                 target_size = (64, 64),
-                                                 batch_size = 32,
-                                                 class_mode = 'binary')
+# Step 2 - Max Pooling
+#       pool_size = shape of the pooling vector, recommended is 2x2
+classifier.add(MaxPooling2D(pool_size=(2, 2)))
 
-### Creating the Test set
-test_set = test_datagen.flow_from_directory('chest_xray/test',
-                                            target_size = (64, 64),
-                                            batch_size = 32,
-                                            class_mode = 'binary')
+# Step 1 and 2 one more time - THIS IS DEEP LEARNING!!
+classifier.add(Convolution2D(64, 6, 6, activation = 'relu'))
+classifier.add(MaxPooling2D(pool_size=(2, 2)))
 
-###############################
-## Part 2 - Building the CNN
-###############################
+# Step 3 - Flattening
+classifier.add(Flatten())
 
-### Initialising the CNN
-cnn = tf.keras.models.Sequential()
+# Step 4 - Full Connection
+#       units = experimental value, something not so high to not cost much of computation, but not so low to not power the model. Usually is a power of 2. Or, of course is the number of categories we need for output
+#       activation = activation function for the output of current layer
+classifier.add(Dense(activation = 'relu', units = 128))
+classifier.add(Dense(activation = 'sigmoid', units = 1))
 
-### Step 1 - Convolution
-cnn.add(tf.keras.layers.Conv2D(filters=32, kernel_size=3, padding="same", activation="relu", input_shape=[64, 64, 3]))
+# Compiling model
+#       optimizer = algorithm used to calculate teh weights, usually is adam
+#       loss = function used to validate the errors and improve the search for the minor errors, binary_crossentropy is for binary outputs, if we have more use categorical_crossentropy
+#       metrics = metrics used to evaluate model during the training, usually accuracy
+classifier.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
 
-### Step 2 - Pooling
-cnn.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2, padding='valid'))
+############################################
+# Part 2 - Fitting CNN to the images
+############################################
 
-### Adding a second convolutional layer
-cnn.add(tf.keras.layers.Conv2D(filters=32, kernel_size=3, padding="same", activation="relu"))
-cnn.add(tf.keras.layers.MaxPool2D(pool_size=2, strides=2, padding='valid'))
+from keras.preprocessing.image import ImageDataGenerator
 
-### Step 3 - Flattening
-cnn.add(tf.keras.layers.Flatten())
+# Image Augmentation
+# Consider random small changes in trainning dataset to improve the capacity of generalization of the model, this object is just for prepare the train data
+train_datagen = ImageDataGenerator(
+        rescale=1./255,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True
+)
 
-### Step 4 - Full Connection
-cnn.add(tf.keras.layers.Dense(units=128, activation='relu'))
+# Image Augmentation
+# for test is not necessary changes
+test_datagen = ImageDataGenerator(rescale=1./255)
 
-### Step 5 - Output Layer
-cnn.add(tf.keras.layers.Dense(units=1, activation='sigmoid'))
+# Image Augmentation and prepare training data
+# Training set
+#       target_size should be the size of input of first convolution layer
+#       batch_size is the size of packages presented to the model at once within an epoch, the number of batches presented to the model will be total samples divided by batch_size
+#       class_mode define basically if we are working with binary classification or categorical
+training_set = train_datagen.flow_from_directory('chest_xray/train', target_size=(64, 64), batch_size=32, class_mode='binary')
 
-### Summarize the network
-cnn.summary()
+# Image Augmentation and prepare training data
+# Test set - the parameters are the same as above
+test_set = test_datagen.flow_from_directory('chest_xray/test', target_size=(64, 64), batch_size=32, class_mode='binary')
 
-###############################
-## Part 3 - Training the CNN
-###############################
+# !!!Train the classifier!!!
+#       samples_per_epoch is the total number of samples in the training dataset
+#       nb_val_samples is the total number of samples in the test dataset
+#       nb_epoch is the number of times all samples will be shown to the model for weights adjustments
+classifier.fit_generator(training_set, samples_per_epoch = 5216, nb_epoch=100, validation_data=test_set, nb_val_samples = 624)
 
-### Compiling the CNN
-cnn.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+# Save
+name_tosave = 'cnn' + str(calendar.timegm(time.gmtime()))
 
-### Training the CNN on the Training set and evaluating it on the Test set
-cnn.fit(training_set,
-        steps_per_epoch = 80,
-        epochs = 25,
-        validation_data = test_set,
-        validation_steps = 80)
+# Save the class indices
+file1 = open(os.path.join('./saved-models', name_tosave + '.txt'),"w")
+file1.writelines(str(training_set.class_indices)) 
+file1.close() #to change file access modes
 
-### Evaluate the CNN
-# scores = model.evaluate(X, Y, verbose=0)
-# print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+# Save the model
+classifier.save(os.path.join('./saved-models', name_tosave + '.h5'))
 
+############################################
+# Part 3 - Predictions
+############################################
 
-### Save the model
-cnn.save(os.path.join('./saved-models', 'cnn' + str(calendar.timegm(time.gmtime())) + '.h5'))
-
-
-### Load the model back
-# from numpy import loadtxt
-# from keras.models import load_model
- 
-# # load model
-# model = load_model('model.h5')
-
-# # summarize model.
-# model.summary()
+# Check file prediction.py

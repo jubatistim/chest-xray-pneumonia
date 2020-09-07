@@ -31,6 +31,8 @@ for filename in os.listdir(os.path.join(base_dir, 'chest_xray', 'val', 'NORMAL')
     test_image = np.expand_dims(test_image, axis = 0) # this is necessary because precit method expect 4 dimensions, 3 for image, and one for batch number
     result = model.predict(test_image)
 
+    print(result)
+
     # result
     if result[0][0] == 1:
         prediction = 'PNEUMONIA'
@@ -38,7 +40,7 @@ for filename in os.listdir(os.path.join(base_dir, 'chest_xray', 'val', 'NORMAL')
     else:
         prediction = 'NORMAL'
         success_normal = success_normal + 1
-
+        
     print('NORMAL: ' + prediction)
 
 for filename in os.listdir(os.path.join(base_dir, 'chest_xray', 'val', 'PNEUMONIA')):

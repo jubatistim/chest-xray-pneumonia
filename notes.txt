@@ -1,0 +1,1 @@
+Where to get data: https://www.kaggle.com/paultimothymooney/chest-xray-pneumonia
